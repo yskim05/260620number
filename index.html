@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>랜덤 뽑기</title>
+    <style>
+        :root {
+            --primary-red: #ff4757;
+            --primary-yellow: #ffa502;
+            --primary-blue: #1e90ff;
+            --primary-green: #2ed573;
+            --bg-sky: linear-gradient(180deg, #74b9ff 0%, #a29bfe 100%);
+            --font-main: 'Arial', sans-serif;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font-main); }
+        body { background: var(--bg-sky); min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; color: #2d3436; position: relative; }
+
+        /* 네비게이션 바 */
+        header { background: rgba(255, 255, 255, 0.9); padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); z-index: 10; }
+        .logo-area { display: flex; align-items: center; gap: 10px; font-size: 24px; font-weight: bold; color: #2f3542; }
+        .controls-area { display: flex; gap: 15px; align-items: center; }
+        
+        select, button { padding: 10px 20px; font-size: 18px; border-radius: 25px; border: 2px solid #ced6e0; cursor: pointer; transition: transform 0.1s; font-weight: bold; }
+        button:active { transform: scale(0.95); }
+        .btn-mode { background: #f1f2f6; color: #57606f; }
+        .btn-mode.active { background: var(--primary-blue); color: white; border-color: var(--primary-blue); }
+        .btn-main { background: var(--primary-red); color: white; border: none; box-shadow: 0 6px 0 #cf2131; position: relative; }
+        .btn-main:active { transform: translateY(4px); box-shadow: 0 2px 0 #cf2131; }
+        .btn-util { background: #747d8c; color: white; border: none; }
+
+        /* 메인 컨텐츠 컨테이너 */
+        main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; position: relative; z-index: 2; }
+
+        /* 이름 뽑기 모드 레이아웃 */
+        #name-mode-view { display: flex; flex-direction: column; align-items: center; gap: 20px; position: relative; }
+        
+        /* 룰렛 스타일 */
+        .roulette-container { position: relative; width: 400px; height: 400px; margin-bottom: 25px; filter: drop-shadow(0 15px 15px rgba(0,0,0,0.25)); }
+        #roulette-canvas { width: 100%; height: 100%; border-radius: 50%; border: 10px solid white; background: #fff; transition: transform 4s cubic-bezier(0.1, 0.8, 0.1, 1); }
+        
+        /* 펭귄 화살표 */
+        .penguin-pointer { position: absolute; top: -30px; left: 50%; transform: translateX(-50%); width: 60px; height: 60px; font-size: 55px; text-align: center; z-index: 10; animation: bounce 0.5s infinite alternate; }
+        @keyframes bounce { from { transform: translateX(-50%) translateY(0); } to { transform: translateX(-50%) translateY(-12px); } }
+
+        /* 결과 거대 팝업 */
+        #result-popup { display: none; position: absolute; background: white; border: 10px solid var(--primary-yellow); padding: 50px 80px; border-radius: 40px; font-size: 80px; font-weight: bold; text-align: center; box-shadow: 0 25px 40px rgba(0,0,0,0.4); z-index: 100; animation: popOpen 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); color: #2f3542; cursor: pointer; }
+        @keyframes popOpen { 0% { transform: scale(0) rotate(-10deg); } 100% { transform: scale(1) rotate(0deg); } }
+
+        /* 폭죽 캔버스 (전체 화면 덮기) */
+        #confetti-canvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 99; display: none; }
+
+        /* 팀 나누기 모드 레이아웃 */
+        #team-mode-view { display: none; width: 100%; max-width: 1200px; height: 70vh; flex-direction: column; gap: 20px; }
+        .team-setup { display: flex; justify-content: center; gap: 15px; align-items: center; background: rgba(255,255,255,0.8); padding: 15px; border-radius: 15px; }
+        .team-grid { flex: 1; display: grid; gap: 20px; min-height: 300px; }
+        .team-card { border-radius: 20px; padding: 20px; color: white; box-shadow: 0 8px 20px rgba(0,0,0,0.15); display: flex; flex-direction: column; animation: popOpen 0.5s ease; }
+        .team-card h2 { font-size: 28px; margin-bottom: 15px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); border-bottom: 2px solid rgba(255,255,255,0.4); padding-bottom: 5px; }
+        .team-members { flex: 1; font-size: 22px; font-weight: bold; display: flex; flex-wrap: wrap; gap: 10px; align-content: flex-start; }
+        .member-tag { background: rgba(255,255,255,0.3); padding: 5px 15px; border-radius: 15px; animation: popOpen 0.3s ease; }
+
+        /* 모둠별 색상 상자 */
+        .team-0 { background: var(--primary-red); }
+        .team-1 { background: var(--primary-blue); }
+        .team-2 { background: var(--primary-yellow); color: #2d3436; }
+        .team-3 { background: var(--primary-green); }
+
+        /* 옵션 제어 바 (하단) */
+        .bottom-bar { background: rgba(0, 0, 0, 0.6); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; font-size: 16px; font-weight: bold; z-index: 10; }
+        .toggle-container { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+
+        /* 모달 팝업 창 */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 30px; border-radius: 20px; width: 90%; max-width: 600px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+        .modal-content h3 { margin-bottom: 15px; font-size: 22px; }
+        textarea { width: 100%; height: 150px; padding: 10px; font-size: 16px; border-radius: 10px; border: 2px solid #ccc; margin-bottom: 15px; resize: none; }
+        .modal-buttons { display: flex; justify-content: flex-end; gap: 10px; }
+        
+        /* 비공개 통계 영역 */
+        #stats-area { margin-top: 15px; padding-top: 15px; border-top: 2px dashed #ccc; max-height: 150px; overflow-y: auto; }
+        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; font-size: 14px; }
+
+        /* 배경 응원 마스코트 데코 */
+        .mascot-deco { position: absolute; bottom: 10px; font-size: 45px; pointer-events: none; }
+        #mascot-left { left: 40px; }
+        #mascot-right { right: 40px; }
+    </style>
+</head>
+<body>
+
+    <script>
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let soundOn = true;
+
+        function playSound(type) {
+            if (!soundOn) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            if (type === 'tick') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.05);
+            } else if (type === 'win') {
+                // 당첨 시 좀 더 풍성한 2중 화음 피드백
+                const osc2 = audioCtx.createOscillator();
+                const gain2 = audioCtx.createGain();
+                osc2.connect(gain2); gain2.connect(audioCtx.destination);
+                
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // 도(C5)
+                osc.frequency.exponentialRampToValueAtTime(1046.50, audioCtx.currentTime + 0.4); // 도(C6)
+                osc2.type = 'sine'; osc2.frequency.setValueAtTime(659.25, audioCtx.currentTime); // 미(E5)
+                osc2.frequency.exponentialRampToValueAtTime(1318.51, audioCtx.currentTime + 0.4); // 미(E6)
+                
+                gain.gain.setValueAtTime(0.15, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                gain2.gain.setValueAtTime(0.1, audioCtx.currentTime); gain2.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                
+                osc.start(); osc.stop(audioCtx.currentTime + 0.5);
+                osc2.start(); osc2.stop(audioCtx.currentTime + 0.5);
+            } else if (type === 'pop') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(350, audioCtx.currentTime);
+                osc.frequency.setValueAtTime(600, audioCtx.currentTime + 0.06);
+                gain.gain.setValueAtTime(0.12, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.12);
+            }
+        }
+    </script>
+
+    <canvas id="confetti-canvas"></canvas>
+
+    <header>
+        <div class="logo-area">🎁 랜덤 뽑기</div>
+        <div class="controls-area">
+            <select id="class-select" onchange="switchClass()"></select>
+            <button class="btn-mode active" id="btn-name-mode" onclick="changeMode('name')">🎯 이름 뽑기</button>
+            <button class="btn-mode" id="btn-team-mode" onclick="changeMode('team')">👟 모둠 나누기</button>
+            <button class="btn-util" onclick="openModal()">⚙️ 반 명단 설정</button>
+            <button id="sound-toggle" class="btn-util" onclick="toggleSound()">🔊 소리 켬</button>
+        </div>
+    </header>
+
+    <main>
+        <div id="mascot-left" class="mascot-deco">🐰✨</div>
+        <div id="mascot-right" class="mascot-deco">🐶🎉</div>
+
+        <div id="result-popup" onclick="closePopup()"></div>
+
+        <div id="name-mode-view">
+            <div class="roulette-container">
+                <div class="penguin-pointer">🐧</div>
+                <canvas id="roulette-canvas" width="500" height="500"></canvas>
+            </div>
+            <button class="btn-main" style="font-size: 32px; padding: 15px 50px; border-radius: 40px;" onclick="spinRoulette()">▶️ 돌려돌려 룰렛!</button>
+        </div>
+
+        <div id="team-mode-view">
+            <div class="team-setup">
+                <span style="font-size: 20px; font-weight: bold;">몇 개 모둠으로 나눌까요?</span>
+                <select id="team-count-select" style="padding: 5px 15px;">
+                    <option value="2">2개 모둠</option>
+                    <option value="3">3개 모둠</option>
+                    <option value="4" selected>4개 모둠</option>
+                    <option value="5">5개 모둠</option>
+                    <option value="6">6개 모둠</option>
+                </select>
+                <button class="btn-main" style="padding: 10px 25px;" onclick="divideTeams()">🎲 모둠 나누기 시작!</button>
+            </div>
+            <div class="team-grid" id="team-grid-container"></div>
+        </div>
+    </main>
+
+    <div class="bottom-bar">
+        <label class="toggle-container">
+            <input type="checkbox" id="exclude-toggle" style="width:20px; height:20px;">
+            <span>한 번 뽑힌 아이는 다음 뽑기에서 빼기 (제외 모드)</span>
+        </label>
+        <div>
+            <span id="excluded-list-text">제외된 학생 없음</span>
+            <button class="btn-util" style="padding: 3px 10px; font-size:14px; margin-left:10px;" onclick="resetExclusions()">모두 포함 초기화</button>
+        </div>
+    </div>
+
+    <div class="modal" id="settings-modal">
+        <div class="modal-content">
+            <h3>🏫 반 명단 관리 및 수정</h3>
+            <div style="margin-bottom: 10px;">
+                <select id="modal-class-select" onchange="loadModalClassData()" style="font-size:15px; padding:5px;"></select>
+                <button class="btn-util" style="font-size:14px; padding:5px 10px;" onclick="addNewClass()">+ 새 학반 추가</button>
+                <button class="btn-util" style="font-size:14px; padding:5px 10px; background:#ff4757;" onclick="deleteCurrentClass()">현재 반 삭제</button>
+            </div>
+            <p style="font-size:14px; color:#57606f; margin-bottom:5px;">학생 이름을 엔터(줄바꿈)나 쉼표로 구분해서 적어주세요.</p>
+            <textarea id="student-names-input"></textarea>
+            
+            <div class="modal-buttons">
+                <button class="btn-main" style="padding: 8px 20px;" onclick="saveClassData()">저장하기</button>
+                <button class="btn-util" onclick="closeModal()">닫기</button>
+            </div>
+
+            <div id="stats-area">
+                <h4 style="font-size:14px; margin-bottom:5px; color:#1e90ff;">🔒 교사 비밀 통계 (앱 켜진 동안의 학생별 뽑힌 횟수)</h4>
+                <div class="stats-grid" id="stats-grid-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 초기 기본 데이터 데이터 생성
+        let defaultData = {
+            "1학년 1반": ["김민준", "이서연", "박도현", "최윤서", "정우진", "한지민", "강민재", "윤준서", "신지아", "임지우", "조현우", "장서현", "유재원", "오민지"],
+            "1학년 2반": ["홍길동", "성춘향", "이몽룡", "심청이", "임꺽정", "장길산", "박문수", "황진이"]
+        };
+
+        let appData = JSON.parse(localStorage.getItem('tongtong_roulette_data')) || defaultData;
+        let currentClass = Object.keys(appData)[0] || "1학년 1반";
+        let excludedStudents = [];
+        let stats = {};
+        let isSpinning = false;
+        let currentMode = 'name';
+
+        const canvas = document.getElementById('roulette-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // 폭죽(Confetti) 시스템을 위한 변수
+        const confettiCanvas = document.getElementById('confetti-canvas');
+        const confettiCtx = confettiCanvas.getContext('2d');
+        let confettis = [];
+        let confettiAnimationId = null;
+
+        window.onload = function() {
+            initClassSelect();
+            initStats();
+            drawRoulette();
+            window.addEventListener('resize', resizeConfettiCanvas);
+            resizeConfettiCanvas();
+        };
+
+        function resizeConfettiCanvas() {
+            confettiCanvas.width = window.innerWidth;
+            confettiCanvas.height = window.innerHeight;
+        }
+
+        function initClassSelect() {
+            const select = document.getElementById('class-select');
+            const modalSelect = document.getElementById('modal-class-select');
+            select.innerHTML = ''; modalSelect.innerHTML = '';
+            
+            Object.keys(appData).forEach(cls => {
+                let opt1 = document.createElement('option'); opt1.value = cls; opt1.innerText = cls;
+                let opt2 = document.createElement('option'); opt2.value = cls; opt2.innerText = cls;
+                select.appendChild(opt1); modalSelect.appendChild(opt2);
+            });
+            select.value = currentClass;
+        }
+
+        function initStats() {
+            stats = {};
+            if(appData[currentClass]) {
+                appData[currentClass].forEach(name => stats[name] = 0);
+            }
+            updateStatsView();
+        }
+
+        function switchClass() {
+            currentClass = document.getElementById('class-select').value;
+            excludedStudents = [];
+            updateExclusionText();
+            initStats();
+            drawRoulette();
+        }
+
+        function getActiveStudents() {
+            let all = appData[currentClass] || [];
+            if (document.getElementById('exclude-toggle').checked) {
+                return all.filter(name => !excludedStudents.includes(name));
+            }
+            return all;
+        }
+
+        function drawRoulette(currentAngle = 0) {
+            const students = getActiveStudents();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (students.length === 0) {
+                ctx.save(); ctx.translate(canvas.width/2, canvas.height/2);
+                ctx.font = "bold 24px Arial"; ctx.fillStyle = "#57606f"; ctx.textAlign = "center";
+                ctx.fillText("명단이 비어있거나 다 제외되었습니다", 0, 0); ctx.restore();
+                return;
+            }
+
+            const arc = (2 * Math.PI) / students.length;
+            const colors = [varStr('--primary-red'), varStr('--primary-blue'), varStr('--primary-yellow'), varStr('--primary-green')];
+
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.rotate(currentAngle);
+
+            for (let i = 0; i < students.length; i++) {
+                ctx.fillStyle = colors[i % colors.length];
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.arc(0, 0, 240, i * arc, (i + 1) * arc);
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.stroke();
+
+                ctx.save();
+                ctx.fillStyle = (i % colors.length === 2) ? "#2d3436" : "#ffffff";
+                ctx.font = "bold 24px Arial";
+                ctx.textAlign = "right";
+                ctx.rotate(i * arc + arc / 2);
+                ctx.fillText(students[i], 210, 10);
+                ctx.restore();
+            }
+            ctx.restore();
+
+            ctx.beginPath(); ctx.arc(canvas.width/2, canvas.height/2, 30, 0, 2*Math.PI);
+            ctx.fillStyle = 'white'; ctx.fill(); ctx.strokeStyle = '#ced6e0'; ctx.lineWidth = 4; ctx.stroke();
+        }
+
+        function varStr(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+        function spinRoulette() {
+            if (isSpinning) return;
+            const students = getActiveStudents();
+            if (students.length === 0) return alert("뽑을 수 있는 학생이 없습니다!");
+
+            isSpinning = true;
+            closePopup();
+            stopConfetti();
+
+            let duration = 3500; 
+            let startTimestamp = null;
+            const targetRotation = Math.PI * 2 * (6 + Math.random() * 5); // 속도감 향상을 위해 한 바퀴 더 추가
+
+            let lastTickAngle = 0;
+            const arc = (2 * Math.PI) / students.length;
+
+            function animate(timestamp) {
+                if (!startTimestamp) startTimestamp = timestamp;
+                let elapsed = timestamp - startTimestamp;
+                let progress = Math.min(elapsed / duration, 1);
+                
+                let easeOutProgress = 1 - Math.pow(1 - progress, 4); // 더 부드럽고 역동적인 감속 스케일
+                let currentAngle = easeOutProgress * targetRotation;
+
+                if (Math.floor(currentAngle / arc) > Math.floor(lastTickAngle / arc)) {
+                    playSound('tick');
+                    lastTickAngle = currentAngle;
+                }
+
+                drawRoulette(currentAngle);
+
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    isSpinning = false;
+                    let finalAngle = currentAngle % (Math.PI * 2);
+                    let correctedAngle = (3 * Math.PI / 2 - finalAngle) % (Math.PI * 2);
+                    if (correctedAngle < 0) correctedAngle += Math.PI * 2;
+                    
+                    let winnerIndex = Math.floor(correctedAngle / arc) % students.length;
+                    let winner = students[winnerIndex];
+
+                    showResultPopup(winner);
+                    startConfetti(); // 당첨 순간 폭죽 뿜어내기 가동
+
+                    stats[winner] = (stats[winner] || 0) + 1;
+                    updateStatsView();
+
+                    if (document.getElementById('exclude-toggle').checked) {
+                        excludedStudents.push(winner);
+                        updateExclusionText();
+                    }
+                }
+            }
+            requestAnimationFrame(animate);
+        }
+
+        // --- 결과창 표시 및 폭죽 트리거 ---
+        function showResultPopup(name) {
+            playSound('win');
+            const popup = document.getElementById('result-popup');
+            popup.innerText = `🎉 ${name} 🎉`;
+            popup.style.display = 'block';
+            
+            setTimeout(() => { popup.style.transform = 'scale(1.15) rotate(3deg)'; }, 100);
+            setTimeout(() => { popup.style.transform = 'scale(1) rotate(0deg)'; }, 250);
+        }
+
+        function closePopup() { 
+            document.getElementById('result-popup').style.display = 'none'; 
+            stopConfetti();
+        }
+
+        // --- 폭죽(Confetti) 수학적 구현 파트 ---
+        function startConfetti() {
+            confettiCanvas.style.display = 'block';
+            confettis = [];
+            
+            // 총 150개의 색동 조각 생성
+            const colors = ['#ff4757', '#ffa502', '#1e90ff', '#2ed573', '#ff6b81', '#ffffff'];
+            for (let i = 0; i < 150; i++) {
+                confettis.push({
+                    x: window.innerWidth / 2, // 화면 중앙(팝업 위치)에서 사방으로 분출
+                    y: window.innerHeight / 2 - 50,
+                    size: Math.random() * 8 + 6,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    // 분출 각도 및 초기 속도 벡터
+                    speedX: (Math.random() - 0.5) * 15,
+                    speedY: (Math.random() - 0.7) * 18 - 5,
+                    gravity: 0.35,
+                    rotation: Math.random() * 360,
+                    rotationSpeed: (Math.random() - 0.5) * 10
+                });
+            }
+            
+            if (confettiAnimationId) cancelAnimationFrame(confettiAnimationId);
+            updateConfetti();
+        }
+
+        function updateConfetti() {
+            confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+            let alive = false;
+
+            confettis.forEach(p => {
+                p.x += p.speedX;
+                p.speedY += p.gravity;
+                p.y += p.speedY;
+                p.rotation += p.rotationSpeed;
+
+                // 화면 안에 존재하는 조각이 하나라도 있으면 루프 유지
+                if (p.y < confettiCanvas.height && p.x > 0 && p.x < confettiCanvas.width) {
+                    alive = true;
+                }
+
+                confettiCtx.save();
+                confettiCtx.translate(p.x, p.y);
+                confettiCtx.rotate(p.rotation * Math.PI / 180);
+                confettiCtx.fillStyle = p.color;
+                // 사각형 조각 그리기
+                confettiCtx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+                confettiCtx.restore();
+            });
+
+            if (alive) {
+                confettiAnimationId = requestAnimationFrame(updateConfetti);
+            } else {
+                stopConfetti();
+            }
+        }
+
+        function stopConfetti() {
+            if (confettiAnimationId) cancelAnimationFrame(confettiAnimationId);
+            confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+            confettiCanvas.style.display = 'none';
+        }
+
+        // --- 모둠 나누기 모드 로직 (1모둠, 2모둠형) ---
+        function divideTeams() {
+            closePopup();
+            stopConfetti();
+            const students = [...(appData[currentClass] || [])];
+            if (students.length === 0) return alert("명단에 학생이 없습니다.");
+
+            const teamCount = parseInt(document.getElementById('team-count-select').value);
+            const container = document.getElementById('team-grid-container');
+            container.innerHTML = '';
+
+            // 무작위 셔플
+            for (let i = students.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [students[i], students[j]] = [students[j], students[i]];
+            }
+
+            // 모둠 분배
+            let teams = Array.from({ length: teamCount }, () => []);
+            students.forEach((student, index) => {
+                teams[index % teamCount].push(student);
+            });
+
+            // 모둠 수에 따른 격자 배치 유연화
+            if (teamCount <= 2) {
+                container.style.gridTemplateColumns = '1fr 1fr';
+            } else if (teamCount <= 4) {
+                container.style.gridTemplateColumns = '1fr 1fr';
+            } else {
+                container.style.gridTemplateColumns = '1fr 1fr 1fr';
+            }
+
+            // 모둠 카드 만들기
+            const baseColors = [varStr('--primary-red'), varStr('--primary-blue'), varStr('--primary-yellow'), varStr('--primary-green'), '#a29bfe', '#ff7675'];
+            
+            teams.forEach((teamData, i) => {
+                let card = document.createElement('div');
+                card.className = `team-card`;
+                card.style.backgroundColor = baseColors[i % baseColors.length];
+                if(i % baseColors.length === 2) card.style.color = '#2d3436'; // 노란 계열 글씨 가독성
+                
+                let title = document.createElement('h2');
+                title.innerText = `${i + 1}모둠 (${teamData.length}명)`;
+                card.appendChild(title);
+
+                let membersDiv = document.createElement('div');
+                membersDiv.className = 'team-members';
+
+                teamData.forEach((name, idx) => {
+                    setTimeout(() => {
+                        let tag = document.createElement('span');
+                        tag.className = 'member-tag';
+                        tag.innerText = name;
+                        membersDiv.appendChild(tag);
+                        playSound('pop');
+                    }, idx * 70); 
+                });
+
+                card.appendChild(membersDiv);
+                container.appendChild(card);
+            });
+        }
+
+        // --- 공통 상태 제어 시스템 ---
+        function changeMode(mode) {
+            currentMode = mode;
+            closePopup();
+            stopConfetti();
+            document.getElementById('btn-name-mode').classList.toggle('active', mode === 'name');
+            document.getElementById('btn-team-mode').classList.toggle('active', mode === 'team');
+            document.getElementById('name-mode-view').style.display = mode === 'name' ? 'flex' : 'none';
+            document.getElementById('team-mode-view').style.display = mode === 'team' ? 'flex' : 'none';
+            if (mode === 'name') drawRoulette();
+        }
+
+        function toggleSound() {
+            soundOn = !soundOn;
+            document.getElementById('sound-toggle').innerText = soundOn ? "🔊 소리 켬" : "🔇 소리 끔";
+        }
+
+        function updateExclusionText() {
+            const span = document.getElementById('excluded-list-text');
+            if (excludedStudents.length === 0) span.innerText = "제외된 학생 없음";
+            else span.innerText = `제외됨(${excludedStudents.length}명): ${excludedStudents.join(', ')}`;
+            drawRoulette();
+        }
+
+        function resetExclusions() {
+            excludedStudents = [];
+            updateExclusionText();
+        }
+
+        function openModal() {
+            document.getElementById('settings-modal').style.display = 'flex';
+            initClassSelect();
+            loadModalClassData();
+        }
+
+        function closeModal() { document.getElementById('settings-modal').style.display = 'none'; drawRoulette(); }
+
+        function loadModalClassData() {
+            const targetClass = document.getElementById('modal-class-select').value;
+            if(!targetClass) return;
+            const names = appData[targetClass] || [];
+            document.getElementById('student-names-input').value = names.join('\n');
+        }
+
+        function saveClassData() {
+            const targetClass = document.getElementById('modal-class-select').value;
+            if(!targetClass) return;
+            const txt = document.getElementById('student-names-input').value;
+            const namesArray = txt.split(/[\n,]+/).map(n => n.trim()).filter(n => n.length > 0);
+            
+            appData[targetClass] = namesArray;
+            localStorage.setItem('tongtong_roulette_data', JSON.stringify(appData));
+            
+            currentClass = targetClass;
+            initClassSelect();
+            initStats();
+            alert("명단이 컴퓨터에 똑똑하게 저장되었습니다!");
+            closeModal();
+        }
+
+        function addNewClass() {
+            let name = prompt("새 학급/학기 이름을 입력하세요 (예: 1학년 3반):");
+            if (!name) return;
+            name = name.trim();
+            if (appData[name]) return alert("이미 있는 이름이에요.");
+            
+            appData[name] = [];
+            currentClass = name;
+            localStorage.setItem('tongtong_roulette_data', JSON.stringify(appData));
+            initClassSelect();
+            loadModalClassData();
+        }
+
+        function deleteCurrentClass() {
+            const targetClass = document.getElementById('modal-class-select').value;
+            if(!targetClass) return;
+            if(!confirm(`${targetClass}의 모든 명단을 삭제할까요?`)) return;
+
+            delete appData[targetClass];
+            localStorage.setItem('tongtong_roulette_data', JSON.stringify(appData));
+            currentClass = Object.keys(appData)[0] || "";
+            initClassSelect();
+            loadModalClassData();
+        }
+
+        function updateStatsView() {
+            const container = document.getElementById('stats-grid-container');
+            container.innerHTML = '';
+            Object.keys(stats).forEach(name => {
+                let div = document.createElement('div');
+                div.innerText = `${name}: ${stats[name]}회`;
+                container.appendChild(div);
+            });
+        }
+    </script>
+</body>
+</html>
